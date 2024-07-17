@@ -76,12 +76,10 @@ impl SerializingRpcClient {
 
         // drive rpc system
         let (sender, receiver) = mpsc::channel();
-        tokio::task::LocalSet::new()
-            .run_until(async move {
-                tokio::task::spawn_local(SerializingRpcClient::start(hello_world, receiver));
-                tokio::task::spawn_local(rpc_system);
-            })
-            .await;
+
+        let set = tokio::task::LocalSet::new();
+        set.spawn_local(SerializingRpcClient::start(hello_world, receiver));
+        set.spawn_local(rpc_system);
 
         SerializingRpcClient {
             sender,
