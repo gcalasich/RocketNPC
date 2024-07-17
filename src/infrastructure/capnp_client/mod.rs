@@ -55,10 +55,8 @@ pub struct SerializingRpcClient {
 
 impl SerializingRpcClient {
     pub async fn new(addr: impl ToSocketAddrs) -> SerializingRpcClient {
-        // initialize result pool
-        RESULT_POOL
-            .set(Default::default())
-            .expect("RESULT_POOL already intialized");
+        // initialize result pool, once
+        let _ = RESULT_POOL.set(Default::default());
 
         let stream = rocket::tokio::net::TcpStream::connect(&addr)
             .await
