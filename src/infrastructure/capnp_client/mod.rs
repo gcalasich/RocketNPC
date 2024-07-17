@@ -1,13 +1,13 @@
 use std::{
     any::Any,
     collections::BTreeMap,
-    sync::{atomic::AtomicU64, Mutex, OnceLock},
+    sync::{atomic::AtomicU64, mpsc, Mutex, OnceLock},
     task::{Poll, Waker},
 };
 
 use capnp_rpc::*;
 use futures::AsyncReadExt;
-use tokio::{net::ToSocketAddrs, sync::mpsc};
+use tokio::net::ToSocketAddrs;
 
 use crate::hello_world_capnp::hello_world;
 
@@ -47,9 +47,9 @@ impl std::future::Future for ResultId {
     }
 }
 
+#[derive(Debug)]
 pub struct SerializingRpcClient {
     sender: mpsc::Sender<(u64, RpcCall)>,
-    receiver: Option<mpsc::Receiver<(u64, RpcCall)>>,
     counter: AtomicU64,
 }
 
@@ -75,70 +75,65 @@ impl SerializingRpcClient {
             rpc_system.bootstrap(rpc_twoparty_capnp::Side::Server);
 
         // drive rpc system
-        let _ = tokio::task::spawn_local(rpc_system);
+        let (sender, receiver) = mpsc::channel();
+        tokio::task::LocalSet::new()
+            .run_until(async move {
+                tokio::task::spawn_local(SerializingRpcClient::start(hello_world, receiver));
+                tokio::task::spawn_local(rpc_system);
+            })
+            .await;
 
-        let (sender, receiver) = mpsc::channel(64);
-
-        // start
-        let mut client = SerializingRpcClient {
+        SerializingRpcClient {
             sender,
-            receiver: Some(receiver),
             counter: 0.into(),
-        };
-
-        client.start(hello_world).await;
-        client
+        }
     }
 
-    async fn start(&mut self, client: hello_world::Client) {
-        let mut receiver = self
-            .receiver
-            .take()
-            .expect("SerializingRpc can't be called twice");
+    async fn start(client: hello_world::Client, receiver: mpsc::Receiver<(u64, RpcCall)>) {
+        println!("Started Sync task");
 
         // start RPC thread
-        let thread = async move {
-            while let Some((id, msg)) = receiver.recv().await {
-                match msg {
-                    RpcCall::SayHelloRequest { message } => {
-                        let mut request = client.say_hello_request();
-                        request.get().init_request().set_name(&message[..]);
+        while let Ok((id, msg)) = receiver.recv() {
+            println!("Got RpcCall #{}", id);
 
-                        let reply = request.send().promise.await.unwrap();
-                        // the capnp-rpc crate kinda really sucks
-                        let reply_message = reply
-                            .get()
-                            .unwrap()
-                            .get_reply()
-                            .unwrap()
-                            .get_message()
-                            .unwrap()
-                            .to_str()
-                            .unwrap();
+            match msg {
+                RpcCall::SayHelloRequest { message } => {
+                    let mut request = client.say_hello_request();
+                    request.get().init_request().set_name(&message[..]);
 
-                        let res = reply_message.to_string();
-                        let r#box: Box<dyn Any + Send> = Box::new(res);
+                    let reply = request.send().promise.await.unwrap();
+                    // the capnp-rpc crate kinda really sucks
+                    let reply_message = reply
+                        .get()
+                        .unwrap()
+                        .get_reply()
+                        .unwrap()
+                        .get_message()
+                        .unwrap()
+                        .to_str()
+                        .unwrap();
 
-                        // send result
-                        let mutex = RESULT_POOL.get().expect("RESULT_POOL not initialized");
-                        let mut result_pool = mutex.lock().unwrap();
-                        let (item, waker) = result_pool
-                            .get_mut(&id)
-                            .expect("Unable to get result object for SayHelloRequest call");
+                    let res = reply_message.to_string();
+                    let r#box: Box<dyn Any + Send> = Box::new(res);
 
-                        *item = Some(r#box);
-                        waker.wake_by_ref();
-                    }
-                };
-            }
-        };
+                    // send result
+                    let mutex = RESULT_POOL.get().expect("RESULT_POOL not initialized");
+                    let mut result_pool = mutex.lock().unwrap();
+                    let (item, waker) = result_pool
+                        .get_mut(&id)
+                        .expect("Unable to get result object for SayHelloRequest call");
 
-        // start
-        tokio::task::LocalSet::new().run_until(thread).await
+                    *item = Some(r#box);
+                    waker.wake_by_ref();
+                }
+            };
+        }
+
+        println!("SerializingClient sync task has exited");
     }
 
-    pub async fn say_hello_request(&self, message: String) -> Box<String> {
-        let id = loop {
+    pub fn next_task_id(&self) -> u64 {
+        loop {
             let id = self
                 .counter
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -150,12 +145,16 @@ impl SerializingRpcClient {
             if !results.contains_key(&id) {
                 break id;
             }
-        };
+        }
+    }
+
+    pub async fn say_hello_request(&self, message: String) -> Box<String> {
+        let id = self.next_task_id();
 
         self.sender
             .send((id, RpcCall::SayHelloRequest { message }))
-            .await
             .unwrap();
+        println!("Sent RpcCall #{}", id);
 
         let res = ResultId(id).await;
         res.downcast::<String>().unwrap()

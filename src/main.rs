@@ -307,6 +307,10 @@ async fn main() {
 
     // setup RPC
     let client = capnp_client::SerializingRpcClient::new("127.0.0.1:4000").await;
+    let response = client
+        .say_hello_request("Hello, to capnp!".to_string())
+        .await;
+    println!("Got: {} from CapN'P", response);
 
     rocket::build()
         .mount("/ExternalAPI", routes![invoke])
