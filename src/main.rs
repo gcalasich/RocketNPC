@@ -1,7 +1,3 @@
-use std::net::ToSocketAddrs;
-
-use futures::AsyncReadExt;
-use hello_world_capnp::hello_world;
 use rocket::{
     data::{self, Data, FromData, ToByteUnit},
     http::{ContentType, Status},
@@ -20,7 +16,6 @@ mod infrastructure;
 
 use infrastructure::capnp_client;
 
-use capnp_rpc::*;
 use serde_json::Value;
 use urlencoding::decode;
 
@@ -83,7 +78,7 @@ impl<'r> FromData<'r> for api_request::APIRequest<'r> {
             None => return Error((Status::UnprocessableEntity, NoColon)),
         };
 
-        Success(api_request::APIRequest::new(&api_name, &api_params))
+        Success(api_request::APIRequest::new(api_name, api_params))
     }
 }
 
@@ -104,23 +99,18 @@ async fn invoke(
 ) -> Result<Json<api_response::ApiResponse>, Json<api_response::ApiResponseError>> {
     const METHOD: &str = "invoke";
     println!("Invoke");
-    let api_param = &request.api_params.replace("+", " ");
-    let api_param_json_result = decode(&api_param);
+    let api_param = &request.api_params.replace('+', " ");
+    let api_param_json_result = decode(api_param);
     match api_param_json_result {
         Ok(ref v) => v,
         Err(e) => {
             return Err(error_handler::handle_error(
                 format!(
                     "{} - {}",
-                    api_error::APIErrorCodes::MAIINV01.to_string(),
+                    api_error::APIErrorCodes::MAIINV01,
                     String::from("Error Decoding API PARAM JSON")
                 ),
-                format!(
-                    "Error: {} - File: {} - Method: {}",
-                    e.to_string(),
-                    FILE,
-                    METHOD
-                ),
+                format!("Error: {} - File: {} - Method: {}", e, FILE, METHOD),
                 api_error::APIErrorTypes::GeneralException,
                 request.api_params.to_string(),
             ))
@@ -133,21 +123,12 @@ async fn invoke(
         return Err(error_handler::handle_error(
             format!(
                 "{} - {}",
-                api_error::APIErrorCodes::MAIINV04.to_string(),
+                api_error::APIErrorCodes::MAIINV04,
                 String::from("Error Deserializing API Request JSON")
             ),
-            format!(
-                "Error: {} - File: {} - Method: {}",
-                e.to_string(),
-                FILE,
-                METHOD
-            ),
+            format!("Error: {} - File: {} - Method: {}", e, FILE, METHOD),
             model::api_error::APIErrorTypes::GeneralException,
-            format!(
-                "{} - {}",
-                request.api_name.to_string(),
-                request.api_params.to_string()
-            ),
+            format!("{} - {}", request.api_name, request.api_params),
         ));
     }
     let _json_values: Value = _result_ser.unwrap();
@@ -163,15 +144,10 @@ async fn invoke(
                 return Err(error_handler::handle_error(
                     format!(
                         "{} - {}",
-                        api_error::APIErrorCodes::MAIINV03.to_string(),
+                        api_error::APIErrorCodes::MAIINV03,
                         String::from("Error Deserializing API Request JSON")
                     ),
-                    format!(
-                        "Error: {} - File: {} - Method: {}",
-                        e.to_string(),
-                        FILE,
-                        METHOD
-                    ),
+                    format!("Error: {} - File: {} - Method: {}", e, FILE, METHOD),
                     model::api_error::APIErrorTypes::GeneralException,
                     request.api_params.to_string(),
                 ));
@@ -195,15 +171,10 @@ async fn invoke(
                 return Err(error_handler::handle_error(
                     format!(
                         "{} - {}",
-                        api_error::APIErrorCodes::MAIINV06.to_string(),
+                        api_error::APIErrorCodes::MAIINV06,
                         String::from("Error Deserializing API Request JSON")
                     ),
-                    format!(
-                        "Error: {} - File: {} - Method: {}",
-                        e.to_string(),
-                        FILE,
-                        METHOD
-                    ),
+                    format!("Error: {} - File: {} - Method: {}", e, FILE, METHOD),
                     model::api_error::APIErrorTypes::GeneralException,
                     request.api_params.to_string(),
                 ));
@@ -229,15 +200,10 @@ async fn invoke(
                 return Err(error_handler::handle_error(
                     format!(
                         "{} - {}",
-                        api_error::APIErrorCodes::MAIINV07.to_string(),
+                        api_error::APIErrorCodes::MAIINV07,
                         String::from("Error Deserializing API Request JSON")
                     ),
-                    format!(
-                        "Error: {} - File: {} - Method: {}",
-                        e.to_string(),
-                        FILE,
-                        METHOD
-                    ),
+                    format!("Error: {} - File: {} - Method: {}", e, FILE, METHOD),
                     model::api_error::APIErrorTypes::GeneralException,
                     request.api_params.to_string(),
                 ));
@@ -260,15 +226,10 @@ async fn invoke(
                 return Err(error_handler::handle_error(
                     format!(
                         "{} - {}",
-                        api_error::APIErrorCodes::MAIINV08.to_string(),
+                        api_error::APIErrorCodes::MAIINV08,
                         String::from("Error Deserializing API Request JSON")
                     ),
-                    format!(
-                        "Error: {} - File: {} - Method: {}",
-                        e.to_string(),
-                        FILE,
-                        METHOD
-                    ),
+                    format!("Error: {} - File: {} - Method: {}", e, FILE, METHOD),
                     model::api_error::APIErrorTypes::GeneralException,
                     request.api_params.to_string(),
                 ));
@@ -287,25 +248,24 @@ async fn invoke(
         }
 
         "TEST" => {
-            let response_result = rpc_client
+            let hello = rpc_client
                 .say_hello_request(String::from("Hi, capnp!"))
                 .await;
+            println!("Got: {}", hello);
 
-            return Err(error_handler::handle_error(
+            Err(error_handler::handle_error(
                 String::from("entro"),
                 String::from("Entro"),
                 model::api_error::APIErrorTypes::APINotImplemented,
                 String::from("API not implemented"),
-            ));
-        }
-        _ => {
-            return Err(error_handler::handle_error(
-                String::from("API not implemented"),
-                String::from("API not implemented"),
-                model::api_error::APIErrorTypes::APINotImplemented,
-                String::from("API not implemented"),
             ))
         }
+        _ => Err(error_handler::handle_error(
+            String::from("API not implemented"),
+            String::from("API not implemented"),
+            model::api_error::APIErrorTypes::APINotImplemented,
+            String::from("API not implemented"),
+        )),
     }
 }
 
@@ -314,7 +274,7 @@ fn validate_token(
     token: &String,
 ) -> Result<(), Json<api_response::ApiResponseError>> {
     const METHOD: &str = "validate_token";
-    let validate_token_result = application::validate_token::is_token_valid(&token);
+    let validate_token_result = application::validate_token::is_token_valid(token);
     if let Err(e) = validate_token_result {
         return Err(error_handler::handle_error_struct(
             e,
@@ -323,11 +283,11 @@ fn validate_token(
         ));
     }
     let validate_token = validate_token_result.unwrap();
-    if validate_token == false {
+    if !validate_token {
         return Err(error_handler::handle_error(
             format!(
                 "{} - {}",
-                api_error::APIErrorCodes::MAIVTO02.to_string(),
+                api_error::APIErrorCodes::MAIVTO02,
                 String::from("Token Expired")
             ),
             format!(

@@ -20,7 +20,7 @@ pub fn encode_token(authentication: Authentication) -> Result<String, APIError> 
     if let Err(e) = token_result {
         return Err(APIError::new(
             api_error::APIErrorTypes::AuthenticationError,
-            format!("{}-{}", e.to_string(), "Failed to Encode Token"),
+            format!("{}-{}", e, "Failed to Encode Token"),
             FILE.to_string(),
             METHOD.to_string(),
             Utc::now(),
@@ -46,7 +46,7 @@ pub fn decode_token(token: &String) -> Result<Authentication, APIError> {
         println!("error");
         return Err(APIError::new(
             api_error::APIErrorTypes::AuthenticationError,
-            format!("{}-{}", e.to_string(), "SECRET Env Key Required"),
+            format!("{}-{}", e, "SECRET Env Key Required"),
             FILE.to_string(),
             METHOD.to_string(),
             Utc::now(),
@@ -65,7 +65,7 @@ fn get_secret_env_key() -> Result<String, APIError> {
     if let Err(e) = token_secret_res {
         return Err(APIError::new(
             api_error::APIErrorTypes::AuthenticationError,
-            format!("{}-{}", e.to_string(), "SECRET Env Key Required"),
+            format!("{}-{}", e, "SECRET Env Key Required"),
             FILE.to_string(),
             METHOD.to_string(),
             Utc::now(),

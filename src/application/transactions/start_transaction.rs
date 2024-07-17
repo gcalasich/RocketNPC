@@ -22,6 +22,6 @@ pub fn start_transaction(
         String::from("Transaction started successfully"),
         0,
     );
-    println!("{}", "Start Transaction Sucess.");
+    println!("Start Transaction Sucess.");
     Ok(Json(response))
 }

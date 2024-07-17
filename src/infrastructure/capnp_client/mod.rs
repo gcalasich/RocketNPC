@@ -31,7 +31,7 @@ impl std::future::Future for ResultId {
         };
 
         // insert waker
-        if let None = result_pool.get_mut(&self.0) {
+        if result_pool.get_mut(&self.0).is_none() {
             let _ = result_pool.insert(self.0, (None, cx.waker().clone()));
             return Poll::Pending;
         }
@@ -55,6 +55,11 @@ pub struct SerializingRpcClient {
 
 impl SerializingRpcClient {
     pub async fn new(addr: impl ToSocketAddrs) -> SerializingRpcClient {
+        // initialize result pool
+        RESULT_POOL
+            .set(Default::default())
+            .expect("RESULT_POOL already intialized");
+
         let stream = rocket::tokio::net::TcpStream::connect(&addr)
             .await
             .expect("Unable to open CapN'p TPC Stream");
@@ -135,9 +140,19 @@ impl SerializingRpcClient {
     }
 
     pub async fn say_hello_request(&self, message: String) -> Box<String> {
-        let id = self
-            .counter
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let id = loop {
+            let id = self
+                .counter
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+            let mutex = RESULT_POOL.get().expect("RESULT_POOL not initialized");
+            let results = mutex.lock().unwrap();
+
+            // Avoid collisions
+            if !results.contains_key(&id) {
+                break id;
+            }
+        };
 
         self.sender
             .send((id, RpcCall::SayHelloRequest { message }))

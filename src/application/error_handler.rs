@@ -29,11 +29,7 @@ pub fn handle_error_struct(
     error!(target:"app::apierrors", "{} - {} - {} - {} - {}", api_error_obj.error_code.to_string(), api_error_obj.error_message,  api_error_obj.file, api_error_obj.method, api_error_obj.error_info);
 
     let response: api_response::ApiResponseError = api_response::ApiResponseError::new(
-        format!(
-            "{} - {}",
-            api_error_obj.error_code.to_string(),
-            friendly_description.to_string()
-        ),
+        format!("{} - {}", api_error_obj.error_code, friendly_description),
         api_error_obj.error_datestamp,
         friendly_message.to_string(),
         api_error_obj.error_type as i32,

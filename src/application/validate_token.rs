@@ -18,7 +18,7 @@ pub fn is_token_valid(token: &String) -> Result<bool, APIError> {
         .parse::<i32>()
         .unwrap();
 
-    let authentication: authenticate::Authentication = jwt_helper::decode_token(&token)?;
+    let authentication: authenticate::Authentication = jwt_helper::decode_token(token)?;
 
     let authentication_datetime = authentication.last_authentication;
 
@@ -49,7 +49,7 @@ pub fn is_token_valid(token: &String) -> Result<bool, APIError> {
 
 pub fn validate_token(_api_params: &String, token: &String) -> Result<(), APIError> {
     const METHOD: &str = "validate_token";
-    let is_token_valid_result = is_token_valid(&token);
+    let is_token_valid_result = is_token_valid(token);
     if let Err(_e) = is_token_valid_result {
         //return Err(error_handler::handle_error_struct(e, &String::from("Failed Validating Token"), &String::from("API Execution failed.")))
         return Err(APIError::new(
@@ -63,7 +63,7 @@ pub fn validate_token(_api_params: &String, token: &String) -> Result<(), APIErr
         ));
     }
     let is_token_valid = is_token_valid_result.unwrap();
-    if is_token_valid == false {
+    if !is_token_valid {
         //return Err(error_handler::handle_error(format!("{} - {}", api_error::APIErrorCodes::MAIVTO02.to_string(), String::from("Token Expired")), format!("Error: {} - File: {} - Method: {}", "Token Expired", FILE, METHOD),api_error::APIErrorTypes::GeneralException, api_params.to_string()))
         return Err(APIError::new(
             api_error::APIErrorTypes::GeneralException,

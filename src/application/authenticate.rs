@@ -24,13 +24,13 @@ pub fn authenticate(
         return Ok(Json(response));
     }
 
-    return Err(APIError::new(
+    Err(APIError::new(
         api_error::APIErrorTypes::AuthenticationError,
-        format!("{}", "Invalid Password or Username"),
+        "Invalid Password or Username".to_string(),
         FILE.to_string(),
         METHOD.to_string(),
         Utc::now(),
         format!("pasword = {}", "none".to_owned()),
         api_error::APIErrorCodes::APPAUTAUT05,
-    ));
+    ))
 }
