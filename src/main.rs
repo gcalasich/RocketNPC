@@ -94,7 +94,7 @@ fn shutdown(shutdown: Shutdown, request: api_request::APIRequest<'_>) -> &'stati
 
 #[post("/InvokeAPI", data = "<request>")]
 async fn invoke(
-    rpc_client: &State<capnp_client::SerializingRpcClient>,
+    rpc_client: &State<capnp_client::UnsafeClient>,
     request: api_request::APIRequest<'_>,
 ) -> Result<Json<api_response::ApiResponse>, Json<api_response::ApiResponseError>> {
     const METHOD: &str = "invoke";
@@ -250,7 +250,8 @@ async fn invoke(
         "TEST" => {
             let hello = rpc_client
                 .say_hello_request(String::from("Hi, capnp!"))
-                .await;
+                .await
+                .unwrap();
             println!("Got: {}", hello);
 
             Err(error_handler::handle_error(
@@ -306,10 +307,11 @@ async fn main() {
     log4rs::init_file("./src/log4rs.yaml", Default::default()).unwrap();
 
     // setup RPC
-    let client = capnp_client::SerializingRpcClient::new("127.0.0.1:4000").await;
+    let client = capnp_client::UnsafeClient::new("127.0.0.1:4000").await;
     let response = client
         .say_hello_request("Hello, to capnp!".to_string())
-        .await;
+        .await
+        .unwrap();
     println!("Got: {} from CapN'P", response);
 
     rocket::build()
